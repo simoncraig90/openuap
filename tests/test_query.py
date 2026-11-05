@@ -13,6 +13,11 @@ def test_run_sql_select_only():
             query.run_sql(bad)
 
 
+def test_run_sql_allows_semicolon_inside_string_literal():
+    r = query.run_sql("SELECT COUNT(*) FROM events WHERE location_text LIKE 'USA; Phoenix%'", limit=1)
+    assert r["columns"] == ["COUNT(*)"] and r["rows"][0][0] >= 0
+
+
 def test_run_sql_limit_and_shape():
     r = query.run_sql("SELECT id, source_key FROM events", limit=5)
     assert r["columns"] == ["id", "source_key"] and r["row_count"] == 5 and r["truncated"] is True

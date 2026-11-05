@@ -12,11 +12,11 @@ licence notes for every record. It ships with:
 Everything the AI touches is read-only: single SELECT statements, 500-row cap, 20-second timeout,
 SQLite authorizer blocking writes, pragmas and extensions.
 
-## Current contents (build of 2026-11-05)
+## Current contents (build of 2026-11-05, milestone 3)
 
 | source_key | What it is | Records | Access / licence |
 |---|---|---:|---|
-| `nuforc` | NUFORC public sighting reports (2014 snapshot via planetsig mirror) | 88,863 | ToS forbids scraping/redistribution; mirror is for development, request an official export for production |
+| `nuforc` | NUFORC public sighting reports: full text, ids and coordinates 1950-2026 via the uap-monitor mirror, pre-1950 via the planetsig snapshot | 156,452 | ToS forbids scraping/redistribution; mirrors are for research, request an official export for production |
 | `hatch` | Larry Hatch *U* database, 18k curated worldwide cases, geocoded, credibility/strangeness scores | 18,116 | Family permission for research use (via NUFOHRC) |
 | `johnson` | Dr Donald Johnson "On This Day" chronology | 8,689 | Author unreachable; research use |
 | `eberhart` | Eberhart, *UFOs and Intelligence: A Timeline* (CUFOS) | 7,901 | Author permission (2025), non-commercial |
@@ -31,11 +31,12 @@ SQLite authorizer blocking writes, pragmas and extensions.
 | `bluebook_unknowns` | USAF Project Blue Book official "unknowns" (Berliner) | 584 | Public domain |
 | `hall_ufo_evidence` | R. Hall, *The UFO Evidence* vol. 2 | 493 | Research use |
 | `wonders_in_the_sky` | Vallée & Aubeck pre-1880 catalogue | 478 | Research use |
-| `geipan` | GEIPAN (CNES) cases, classification A-D | 398 | French public data (fragment; full export is ~3,000) |
+| `geipan` | GEIPAN (CNES) full catalogue, classification A-D, communes geocoded | 2,770 | French public data; geocoded build from Gods-Eye-UAPs (MIT, GeoNames CC BY) |
+| `dow_pursue` | US Department of War PURSUE Release 01 declassified-file index with summaries | 137 | Public domain |
 | `rife_pre_roswell`, `scully`, `dolan`, `adams_choppers`, `fawcett_hostile`, `trace_cases` | smaller book-derived chronologies | 1,260 | see `sources` table |
 
-Total **145,394 events**, years 34–2023. About 19,000 cross-source duplicate pairs are
-recorded in `event_links` and used to geocode ~2,000 chronology records from Hatch/NUFORC matches.
+Total **215,492 events**, years 34–2026. About 19,000 cross-source duplicate pairs are recorded in
+`event_links`; linked matches and a city gazetteer built from geocoded records add coordinates to ~10,000 chronology rows.
 
 Every row keeps `source_key`, `source_record_id`, `refs` and `url`, and the `sources` table carries the
 licence text, so an AI answer can always say where a claim came from. **Read the licence column
@@ -61,7 +62,8 @@ scraping, so those two loaders also accept files you obtain yourself:
 * NUFORC: an official export as line-delimited JSON in `data/raw/nuforc/*.jsonl`
   (fields `text, stats, date_time, report_link, city, state, shape, duration, summary, posted`);
   it supersedes the 2014 mirror automatically.
-* GEIPAN: the semicolon CSV export from the "Recherche de cas" page dropped in `data/raw/geipan/`.
+* GEIPAN: the full catalogue is fetched automatically (Gods-Eye-UAPs build). The CNES bulk CSV
+  (`cnes-geipan.fr/sites/default/files/Base_de_donn%C3%A9es_des_cas.csv`) is also accepted in `data/raw/geipan/`.
 
 Then run `openuap build` again.
 
@@ -116,8 +118,8 @@ server-side refusal fallback enabled. Use `--model` to pick another model.
 * `events_fts` — FTS5 index over description, summary, location, shape, tags:
   `SELECT e.* FROM events_fts JOIN events e ON e.id = events_fts.rowid WHERE events_fts MATCH 'radar AND pilot'`.
 
-Caveats an analyst should know: the NUFORC mirror truncates descriptions to ~130 characters and ends in 2014;
-GEIPAN mirror rows carry classification but little narrative; chronology sources (Johnson, Eberhart, Overmeire)
+Caveats an analyst should know: NUFORC rows before 1950 come from a snapshot with ~130-character descriptions;
+GEIPAN narratives are in French; chronology sources (Johnson, Eberhart, Overmeire)
 rarely have coordinates except where linked to a geocoded record; Hatch dates are literal, so year 70 is AD 70.
 
 ## Layout
@@ -126,7 +128,7 @@ rarely have coordinates except where linked to a geocoded record; Hatch dates ar
 openuap/
   normalize.py      dates, coordinates, durations, countries, place parsing
   schema.sql        tables, indexes, FTS, views
-  sources/          one loader per catalogue family (geldreich, nuforc, geipan, urecat)
+  sources/          one loader per catalogue family (geldreich, nuforc, geipan, urecat, uap_monitor)
   fetch.py          downloads raw files (GitHub only)
   db.py             build pipeline, duplicate linking, coordinate propagation
   query.py          read-only query API shared by CLI, MCP and ask
@@ -143,5 +145,5 @@ data/openuap.sqlite   the built database (git-ignored)
 Create `openuap/sources/<name>.py` exposing `SOURCES = {source_key: {...metadata}}` and
 `load(raw_dir)` yielding `make_record(...)` dicts (see `sources/base.py`), then append the module to
 `LOADERS` in `sources/__init__.py`. Candidates not yet included: MUFON CMS (members only),
-Enigma Labs (proprietary), UK MoD files and PURSUE/AARO releases (PDF scans, need extraction),
+Enigma Labs (proprietary), UK MoD files and AARO releases (PDF scans, need extraction), PURSUE full-text (only the index is in),
 Canadian CADORS, Blue Book full microfilm index (Fold3), FOTOCAT.

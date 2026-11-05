@@ -66,6 +66,9 @@ def test_parse_location():
     loc = parse_location("Toronto, Ontario, Canada")
     assert (loc["country_code"], loc["region"], loc["city"]) == ("CA", "Ontario", "Toronto")
     assert parse_location("BELLINGHAM, WA")["city"] == "Bellingham"
+    loc = parse_location("USA; Phoenix, Arizona")          # Eberhart joins several places with ';'
+    assert (loc["country_code"], loc["city"], loc["region"]) == ("US", "Phoenix", "Arizona")
+    assert parse_location("Damascus, MD, USA")["region"] == "MD"   # MD is Maryland here, not Moldova
     # 'IN' / 'OR' etc. are US states, never country codes.
     assert parse_location("Gary, IN")["country_code"] == "US"
 

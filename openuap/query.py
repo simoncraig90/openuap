@@ -93,7 +93,7 @@ _FORBIDDEN = re.compile(r"\b(insert|update|delete|drop|alter|create|replace|atta
 def run_sql(sql: str, limit: int = 200, path: Optional[str] = None) -> dict:
     """Execute one read-only SELECT. A LIMIT is appended if the statement has none."""
     s = sql.strip().rstrip(";").strip()
-    if ";" in s:
+    if ";" in re.sub(r"'(?:[^']|'')*'", "''", s):   # ignore semicolons inside string literals
         raise ValueError("one statement at a time")
     if not re.match(r"^(select|with|explain)\b", s, re.I):
         raise ValueError("only SELECT / WITH queries are allowed")
@@ -282,7 +282,9 @@ def describe(path: Optional[str] = None) -> str:
         "PHT photo, TRC physical traces, EME electromagnetic effects, CE3/CE4 close encounters, NLT night lights, SCR saucer, CIG cigar, DLT delta.",
         "- event_links pairs records from different sources that probably describe the same incident (score 0.5–1.0).",
         "- nuclear_tests rows are context, not UFO reports: exclude event_type='nuclear_test' unless correlating.",
-        "- NUFORC mirror descriptions are truncated to ~130 chars; GEIPAN mirror rows mostly lack narrative text.",
+        "- NUFORC rows from 1950 on carry full text and NUFORC ids (extra.mirror='uap-monitor'); pre-1950 rows come from the "
+        "2014 planetsig mirror with ~130-char descriptions. GEIPAN text is French.",
+        "- dow_pursue rows are declassified-document summaries (event_type='document'), not sightings.",
     ]
     return "\n".join(lines)
 

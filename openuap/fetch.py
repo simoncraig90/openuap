@@ -13,12 +13,15 @@ import sys
 import urllib.request
 
 from .db import DEFAULT_RAW
-from .sources import geldreich, nuforc
+from .sources import geldreich, nuforc, geipan
 
 UA = "openuap/0.1 (+https://github.com/ ; research data consolidation)"
 
 GELDREICH_FILES = list(geldreich.FILES) + geldreich.ENRICHMENT_FILES
 RR0_REPO = "https://github.com/RR0/rr0.org.git"
+GODSEYE_GEIPAN_URL = geipan.SOURCES["geipan"]["fetched_from"]
+UAP_MONITOR_REPO = "https://github.com/mhdSid/uap-monitor.git"
+UAP_MONITOR_PATTERNS = ["/public/data/nuforc-*.json", "/public/data/dow-pursue-*.json"]
 RR0_PATTERNS = ["**/GEIPAN_Cataloguedecas.csv", "**/GEIPAN_Catalogue-de-cas.csv", "/time/GrossPatrick_URECAT--Les-ovnis-vus-de-pres-.csv"]
 
 
@@ -52,36 +55,53 @@ def fetch_nuforc_mirror(raw_dir: str, log=print) -> int:
     return int(_download(nuforc.SOURCES["nuforc"]["fetched_from"], dest, log))
 
 
-def fetch_rr0(raw_dir: str, log=print) -> int:
-    """Sparse, blobless clone of rr0.org for the GEIPAN and URECAT CSV exports."""
-    dest = os.path.join(raw_dir, "rr0")
+def _sparse_clone(repo: str, patterns: list[str], dest: str, subdir: str, exts: tuple[str, ...], flatten: bool, log) -> int:
+    """Blobless sparse clone of `repo`; copy matching files under `subdir` into `dest`."""
     if os.path.isdir(dest) and any(True for _ in os.scandir(dest)):
         return 1
     tmp = dest + ".clone"
     shutil.rmtree(tmp, ignore_errors=True)
     try:
-        subprocess.run(["git", "clone", "-q", "--filter=blob:none", "--no-checkout", "--depth", "1", RR0_REPO, tmp], check=True)
+        subprocess.run(["git", "clone", "-q", "--filter=blob:none", "--no-checkout", "--depth", "1", repo, tmp], check=True)
         subprocess.run(["git", "-C", tmp, "sparse-checkout", "init", "--no-cone"], check=True)
         with open(os.path.join(tmp, ".git", "info", "sparse-checkout"), "w") as f:
-            f.write("\n".join(RR0_PATTERNS) + "\n")
+            f.write("\n".join(patterns) + "\n")
         subprocess.run(["git", "-C", tmp, "checkout", "-q"], check=True)
         sha = subprocess.run(["git", "-C", tmp, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
         os.makedirs(dest, exist_ok=True)
-        for root, _dirs, files in os.walk(os.path.join(tmp, "time")):
+        n = 0
+        for root, _dirs, files in os.walk(os.path.join(tmp, subdir)):
             for fn in files:
-                if fn.endswith(".csv"):
-                    rel = os.path.relpath(os.path.join(root, fn), tmp)
-                    os.makedirs(os.path.dirname(os.path.join(dest, rel)), exist_ok=True)
+                if fn.endswith(exts):
+                    rel = fn if flatten else os.path.relpath(os.path.join(root, fn), tmp)
+                    os.makedirs(os.path.dirname(os.path.join(dest, rel)) or dest, exist_ok=True)
                     shutil.copy2(os.path.join(root, fn), os.path.join(dest, rel))
+                    n += 1
         with open(os.path.join(dest, "COMMIT.txt"), "w") as f:
             f.write(sha + "\n")
-        log(f"  rr0.org CSV exports copied (commit {sha[:10]})")
+        log(f"  {repo.rsplit('/', 1)[-1]}: {n} files copied (commit {sha[:10]})")
         return 1
     except subprocess.CalledProcessError as e:
-        log(f"  FAILED rr0 sparse clone: {e}")
+        log(f"  FAILED sparse clone of {repo}: {e}")
         return 0
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def fetch_rr0(raw_dir: str, log=print) -> int:
+    """GEIPAN fragments and the URECAT export mirrored at rr0.org."""
+    return _sparse_clone(RR0_REPO, RR0_PATTERNS, os.path.join(raw_dir, "rr0"), "time", (".csv",), False, log)
+
+
+def fetch_geipan(raw_dir: str, log=print) -> int:
+    """Full geocoded GEIPAN catalogue (Gods-Eye-UAPs build of the CNES bulk CSVs)."""
+    return int(_download(GODSEYE_GEIPAN_URL, os.path.join(raw_dir, "geipan", "geipan_godseye.json"), log))
+
+
+def fetch_uap_monitor(raw_dir: str, log=print) -> int:
+    """NUFORC per-year JSON (full text) and the PURSUE Release 01 index from mhdSid/uap-monitor."""
+    return _sparse_clone(UAP_MONITOR_REPO, UAP_MONITOR_PATTERNS, os.path.join(raw_dir, "uap_monitor"), "public/data",
+                         (".json",), True, log)
 
 
 def fetch_all(raw_dir: str = DEFAULT_RAW, log=print) -> None:
@@ -92,6 +112,10 @@ def fetch_all(raw_dir: str = DEFAULT_RAW, log=print) -> None:
     fetch_nuforc_mirror(raw_dir, log)
     log("rr0.org exports (GEIPAN fragments, URECAT):")
     fetch_rr0(raw_dir, log)
+    log("GEIPAN full catalogue (Gods-Eye-UAPs build):")
+    fetch_geipan(raw_dir, log)
+    log("uap-monitor feeds (NUFORC per-year JSON, PURSUE index):")
+    fetch_uap_monitor(raw_dir, log)
 
 
 if __name__ == "__main__":

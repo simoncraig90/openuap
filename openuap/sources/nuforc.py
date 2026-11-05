@@ -31,9 +31,10 @@ SOURCES = {
     "nuforc": dict(
         name="NUFORC sighting reports", publisher="National UFO Reporting Center",
         url="https://nuforc.org/databank/",
-        license="NUFORC ToS forbids scraping/redistribution. Development mirror: planetsig/ufo-reports (2014 snapshot). "
+        license="NUFORC ToS forbids scraping/redistribution. Mirrors used for research only: mhdSid/uap-monitor per-year JSON "
+                "(full text, NUFORC ids) and planetsig/ufo-reports (2014 snapshot) for earlier years. "
                 "Obtain an official export from NUFORC for production use.",
-        access_type="public-mirror", coverage="worldwide (mostly US), 1906-2014 in mirror; to present in official export",
+        access_type="public-mirror", coverage="worldwide (mostly US), 1906 to the latest mirrored year",
         fetched_from="https://raw.githubusercontent.com/planetsig/ufo-reports/master/csv-data/ufo-complete-geocoded-time-standardized.csv",
     )
 }
@@ -128,13 +129,25 @@ def _jsonl_rows(path: str) -> Iterator[dict]:
 
 
 def load(raw_dir: str) -> Iterator[dict]:
+    """Precedence: official JSONL export > uap-monitor per-year JSON (full text) > planetsig 2014 CSV.
+
+    The planetsig mirror is only used for years that no richer file covers, so a record is never
+    loaded twice from two mirrors.
+    """
+    from . import uap_monitor  # local import: avoids a cycle at package import time
+
     base = os.path.join(raw_dir, RAW_SUBDIR)
-    if not os.path.isdir(base):
-        return
-    jsonl = sorted(glob.glob(os.path.join(base, "*.jsonl")) + glob.glob(os.path.join(base, "*.json")))
+    jsonl = sorted(glob.glob(os.path.join(base, "*.jsonl")) + glob.glob(os.path.join(base, "*.json"))) if os.path.isdir(base) else []
     if jsonl:
         for p in jsonl:
             yield from _jsonl_rows(p)
-        return  # an official/full export supersedes the 2014 mirror
+        return  # an official/full export supersedes every mirror
+    covered = uap_monitor.nuforc_years(raw_dir)
+    if covered:
+        yield from uap_monitor.load_nuforc(raw_dir)
+    if not os.path.isdir(base):
+        return
     for p in sorted(glob.glob(os.path.join(base, "*.csv"))):
-        yield from _planetsig_rows(p)
+        for rec in _planetsig_rows(p):
+            if rec["year"] not in covered:
+                yield rec

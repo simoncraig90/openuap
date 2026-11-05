@@ -701,7 +701,9 @@ def _is_region(tok: str) -> bool:
 
 def _is_country(tok: str) -> bool:
     t = tok.strip().lower().rstrip(".")
-    return t in _COUNTRY_TO_CODE or (len(t) == 2 and t.upper() in _CODE_TO_NAME and t.upper() not in {"IN", "ID", "ME", "OR", "PA", "DE", "CO", "AR", "AL"})
+    if t in _US_STATES or t in _CA_PROV:
+        return False  # MD is Maryland before Moldova, CA California before Canada, in a comma-separated place
+    return t in _COUNTRY_TO_CODE or (len(t) == 2 and t.upper() in _CODE_TO_NAME)
 
 
 def parse_location(location) -> dict:
@@ -735,6 +737,11 @@ def parse_location(location) -> dict:
     if _is_country(last):
         out["country"], out["country_code"] = normalize_country(last)
         parts = parts[:-1]
+    # A country name earlier in the list ('USA; Phoenix, Arizona') is still the country, not a city.
+    inner = [p for p in parts if _is_country(p)]
+    if inner and not out["country_code"]:
+        out["country"], out["country_code"] = normalize_country(inner[0])
+    parts = [p for p in parts if not _is_country(p)]
     if parts and _is_region(parts[-1]):
         out["region"] = parts[-1]
         if not out["country_code"]:
