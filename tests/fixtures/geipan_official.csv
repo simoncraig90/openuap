@@ -1,0 +1,4 @@
+cas_classification;cas_consistance_calc;cas_consistance_calc_err;cas_etrangete_calc;cas_etrangete_calc_err;cas_public;cas_resume;cas_resume_web;cas_zone_nom;id_cas;cas_numEtude;cas_nom_dossier;cas_zone_type;cas_zone_code;cas_AAAA;cas_MM;cas_JJ;cas_date_maj;cas_classification_calc
+D1;0.40;0.05;0.70;0.05;1;Resume interne un.;Lumiere orange observee au-dessus de la mer par deux temoins.;Martinique;2001;2015-03;Le Lamentin;departement;972;2015;03;12;2016-01-10;D1
+C;0.30;0.05;0.20;0.05;1;Resume interne deux.;Objet lumineux fixe dans le ciel de Paris pendant dix minutes.;Paris;2002;1999-07;Paris;departement;75;1999;07;;2010-05-02;C
+A;0.80;0.05;0.10;0.05;1;Resume interne trois.;Phenomene identifie comme la planete Venus.;Bouches-du-Rhone;2003;2008-11;Marseille;departement;13;2008;11;02;2009-02-14;A

@@ -97,6 +97,8 @@ def build(db_path: str = DEFAULT_DB, raw_dir: str = DEFAULT_RAW, only: list[str]
 
     n_geo = propagate_coordinates(con)
     log(f"  {n_geo:,} events geocoded from linked records")
+    n_gaz = gazetteer_geocode(con)
+    log(f"  {n_gaz:,} events geocoded from the city gazetteer")
 
     log("  building full-text index…")
     con.execute("INSERT INTO events_fts(events_fts) VALUES('rebuild')")
@@ -194,6 +196,58 @@ def propagate_coordinates(con: sqlite3.Connection, min_score: float = 0.9) -> in
                     [(lat, lon, tid) for tid, (lat, lon) in seen.items()])
     con.commit()
     return len(seen)
+
+
+def _norm_key(s) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(s or "").lower()).strip()
+
+
+def gazetteer_geocode(con: sqlite3.Connection, min_support: int = 1) -> int:
+    """Geocode events that have a city + country but no coordinates, using the median coordinates of
+    already-geocoded records (Hatch, NUFORC) for the same (city, region, country) key.
+
+    Keys are tried from most to least specific: city+region+country, then city+country when the
+    key is unambiguous (a single region). Results get geo_precision='gazetteer'.
+    """
+    rows = con.execute(
+        "SELECT lower(city), lower(COALESCE(region,'')), country_code, latitude, longitude FROM events "
+        "WHERE latitude IS NOT NULL AND geo_precision IN ('city','source') AND city IS NOT NULL AND country_code IS NOT NULL"
+    ).fetchall()
+    full: dict[tuple, list] = defaultdict(list)
+    loose: dict[tuple, set] = defaultdict(set)
+    for city, region, cc, lat, lon in rows:
+        ck = _norm_key(city)
+        if not ck:
+            continue
+        full[(ck, _norm_key(region), cc)].append((lat, lon))
+        loose[(ck, cc)].add(_norm_key(region))
+
+    def median(pts):
+        # Medoid by latitude: a real observed point, never a lat/lon mix from two different records.
+        pts = sorted(pts)
+        return pts[len(pts) // 2]
+
+    full_med = {k: median(v) for k, v in full.items() if len(v) >= min_support}
+    loose_med = {}
+    for (ck, cc), regions in loose.items():
+        if len(regions) == 1:
+            r = next(iter(regions))
+            if (ck, r, cc) in full_med:
+                loose_med[(ck, cc)] = full_med[(ck, r, cc)]
+
+    targets = con.execute(
+        "SELECT id, city, region, country_code FROM events WHERE latitude IS NULL AND city IS NOT NULL "
+        "AND country_code IS NOT NULL AND event_type <> 'nuclear_test'").fetchall()
+    updates = []
+    for eid, city, region, cc in targets:
+        ck, rk = _norm_key(city), _norm_key(region)
+        # Region may be a full name while the gazetteer has an abbreviation, so try both exact and loose.
+        hit = full_med.get((ck, rk, cc)) or loose_med.get((ck, cc))
+        if hit:
+            updates.append((hit[0], hit[1], eid))
+    con.executemany("UPDATE events SET latitude=?, longitude=?, geo_precision='gazetteer' WHERE id=? AND latitude IS NULL", updates)
+    con.commit()
+    return len(updates)
 
 
 if __name__ == "__main__":

@@ -110,7 +110,7 @@ def _jsonl_rows(path: str) -> Iterator[dict]:
             link = r.get("report_link")
             sid = None
             if link:
-                mm = re.search(r"/(\d+)/?$|S(\d+)\.html", link)
+                mm = re.search(r"[?&]id=(\d+)|/(\d+)/?$|S(\d+)\.html", link)
                 sid = next((g for g in (mm.groups() if mm else ()) if g), None)
             yield make_record(
                 "nuforc", source_record_id=sid or link, event_type="sighting", date=parse_date(date_text),
