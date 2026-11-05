@@ -106,7 +106,7 @@ server-side refusal fallback enabled. Use `--model` to pick another model.
 
 * `events` — one row per record. Key columns: `date_iso` (sortable `YYYY`, `YYYY-MM` or `YYYY-MM-DD`),
   `date_precision`, `year`, `time_text`, `location_text`, `city`, `region`, `country`, `country_code`,
-  `latitude`/`longitude` + `geo_precision`, `shape`, `duration_seconds`, `classification`,
+  `latitude`/`longitude` + `geo_precision` (`source`, `city`, `linked`, `gazetteer`, `none`), `shape`, `duration_seconds`, `classification`,
   `credibility`/`strangeness` (Hatch), `summary`, `description`, `refs` (JSON), `tags` (JSON), `extra` (JSON).
 * `event_type` — `sighting`, `close_encounter`, `crash_retrieval`, `mutilation`, `document`, `historical`,
   `aerospace`, `ufology`, `nuclear_test`. The view `v_sightings` filters to the first two.
